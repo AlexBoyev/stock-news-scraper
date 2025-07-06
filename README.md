@@ -98,5 +98,5 @@ stock-news-scraper/
 
 ## 📄 License & Disclaimer
 
-This project is provided **as-is**, at your own risk. **I am not a financial advisor**, and the data collected should not be considered financial advice.
+This project is provided **as-is**, use it at your own risk. **I am not a financial advisor**, and the data collected should not be considered financial advice.
 MIT © Your AlexBoyev
