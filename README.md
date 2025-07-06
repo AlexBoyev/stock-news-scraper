@@ -1,6 +1,6 @@
 # 📈 Stock News Scraper
 
-A Dockerized Python-based news scraping pipeline that collects real-time financial headlines and stores them in PostgreSQL *and* locally for quick inspection.
+A Dockerized Python-based news scraping pipeline that collects real-time financial headlines and stores them in PostgreSQL *and* locally for further analysis.
 
 ## 📂 Project Structure
 
