@@ -1,0 +1,6 @@
+scrapy
+newsapi-python
+tweepy
+selenium
+psycopg2-binary
+python-dotenv
