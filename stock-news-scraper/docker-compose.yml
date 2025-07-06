@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    env_file:
+      - ./.env              # loads DB_USER, DB_PASS, DB_NAME, etc.
+    # map your DB_* vars into Postgres’s expected ones:
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/stock-news-scraper/data
+    command: >
+      sh -c "
+        python stock_scraper/spiders/news_spider.py &&
+        python postgresql/store_to_postgres.py &&
+        python postgresql/read_data_from_postgres.py &&
+        sleep 120
+      "
+
+volumes:
+  postgres_data:
