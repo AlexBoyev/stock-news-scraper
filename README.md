@@ -96,6 +96,7 @@ stock-news-scraper/
 - Create a feature branch  
 - Submit a pull request with tests and documentation updates  
 
-## 📄 License
+## 📄 License & Disclaimer
 
-MIT © Your Name
+This project is provided **as-is**, at your own risk. **I am not a financial advisor**, and the data collected should not be considered financial advice.
+MIT © Your AlexBoyev
