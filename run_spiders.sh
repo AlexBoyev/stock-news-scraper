@@ -12,5 +12,5 @@ while true; do
   python postgresql/read_data_from_postgres.py
 
   echo "[NEWS] $(date --iso-8601=seconds) → Cycle complete; sleeping 2m…"
-  sleep 600
+  sleep 120
 done

@@ -1,15 +1,14 @@
 import os
+import json
 import psycopg2
+import scrapy
+
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from dotenv import load_dotenv
-import scrapy
 from scrapy.crawler import CrawlerProcess
+from dotenv import load_dotenv
 
-# ─── Load environment ─────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(PROJECT_ROOT / '.env')
 
 class NewsSpider(scrapy.Spider):
     name = 'news'
@@ -35,7 +34,12 @@ class NewsSpider(scrapy.Spider):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # connect to Postgres
+
+        # Load environment variables
+        PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        load_dotenv(PROJECT_ROOT / '.env')
+
+        # Connect to PostgreSQL
         self.conn = psycopg2.connect(
             host=os.getenv('DB_HOST'),
             port=os.getenv('DB_PORT'),
@@ -46,10 +50,20 @@ class NewsSpider(scrapy.Spider):
         self.cur = self.conn.cursor()
 
     def start_requests(self):
-        symbols = os.getenv('SCRAPY_KEYWORDS', '').replace(' ', '')
-        feeds = [
-            f'https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbols}&region=US&lang=en-US',
-            f'https://www.nasdaq.com/feed/rssoutbound?symbol={symbols}',
+        # Load tickers from JSON file
+        PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        tickers_file = PROJECT_ROOT / 'stock_scraper' / 'tickers.json'
+        with open(tickers_file, 'r') as f:
+            symbols = json.load(f)
+
+        # Feeds requiring a symbol placeholder
+        symbol_feeds = [
+            'https://feeds.finance.yahoo.com/rss/2.0/headline?s={}&region=US&lang=en-US',
+            'https://www.nasdaq.com/feed/rssoutbound?symbol={}'
+        ]
+
+        # Feeds that do not require a symbol
+        global_feeds = [
             'https://rss.cnn.com/rss/money_latest.rss',
             'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
             'https://feeds.bbci.co.uk/news/business/rss.xml',
@@ -77,36 +91,46 @@ class NewsSpider(scrapy.Spider):
             'https://www.marketbeat.com/rss.ashx?type=headlines',
             'https://www.marketbeat.com/rss.ashx?type=originals',
             'https://www.marketbeat.com/rss.ashx?type=instant-alerts',
-            'https://feeds.content.dowjones.io/public/rss/mw_topstories',
             'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114',
-            'seekingalpha.com/feed.xml',
             'https://ragingbull.com/feed/',
         ]
 
-        for url in feeds:
+        # Yield requests for global feeds
+        for url in global_feeds:
             yield scrapy.Request(
                 url,
                 callback=self.parse,
                 errback=self.handle_error,
-                meta={'source_feed': url},
+                meta={'source_feed': url}
             )
+
+        # Yield requests for each symbol in symbol_feeds
+        for sym in symbols:
+            for tpl in symbol_feeds:
+                url = tpl.format(sym)
+                yield scrapy.Request(
+                    url,
+                    callback=self.parse,
+                    errback=self.handle_error,
+                    meta={'source_feed': url}
+                )
 
     def parse(self, response):
         if response.status != 200:
             self.logger.warning(f"Skipping {response.url} → HTTP {response.status}")
             return
 
-        # Keep items from the last 7 days (UTC)
         today = datetime.now(timezone.utc).date()
         min_date = today - timedelta(days=7)
 
         for item in response.xpath('//item'):
-            link = item.xpath('link/text()').get()
+            # Try <link>, fallback to <guid>
+            link = item.xpath('link/text()').get() or item.xpath('guid/text()').get()
             pub  = item.xpath('pubDate/text()').get()
             if not link or not pub:
                 continue
 
-            # parse date
+            # Parse publication date
             try:
                 dt = parsedate_to_datetime(pub)
                 if dt.tzinfo is None:
@@ -114,9 +138,8 @@ class NewsSpider(scrapy.Spider):
             except Exception:
                 continue
 
-            item_date = dt.date()
-            # include items from last 7 days up through today
-            if not (min_date <= item_date <= today):
+            # Date filter (last 7 days)
+            if not (min_date <= dt.date() <= today):
                 continue
 
             title   = item.xpath('title/text()').get()
@@ -145,6 +168,7 @@ class NewsSpider(scrapy.Spider):
     def closed(self, reason):
         self.cur.close()
         self.conn.close()
+
 
 if __name__ == '__main__':
     process = CrawlerProcess()
